@@ -10,6 +10,7 @@ const config = require('./config');
 const risk = require('./risk');
 const { validateDecision } = require('./decisionValidator');
 const { fetchQuote } = require('./market');
+const { logOrder } = require('./logger');
 
 // Fetch the initial equity from an environment variable or default
 // to 10 000 USD. In a real application this would reflect your
@@ -33,12 +34,15 @@ function proposeOrder(decision, quote, equity) {
   // Determine shares by risk and by liquidity
   const sharesRisk = risk.riskScaledShares(
     price,
-    /* dailyVol */ 0.02, // For demonstration purposes assume 2 % daily volatility
+    /* dailyVol */ 0.02, // For demonstration purposes assume 2 % daily vol
     equity,
     config.targetRiskBps
   );
   const sharesLiq = risk.maxSharesByLiquidity(advUsd, price, config.maxPctAdv);
-  const shares = Math.min(sharesRisk, sharesLiq);
+  // Limit by position weight to avoid over‑concentration
+  const sharesMaxWeight = Math.floor((config.maxPositionWeight * equity) / price);
+  // Determine the minimum of risk, liquidity and weight limits
+  const shares = Math.min(sharesRisk, sharesLiq, sharesMaxWeight);
   if (shares <= 0) {
     return { error: 'Zero shares after constraints' };
   }
@@ -53,6 +57,8 @@ function proposeOrder(decision, quote, equity) {
       qty: shares,
       limit: Number(limitPrice.toFixed(4)),
       stop: Number(stopLevel.toFixed(4)),
+      // include time‑based stop to surface exit discipline
+      timeStopDays: config.timeStopDays,
     },
   };
 }
@@ -83,6 +89,8 @@ async function main() {
       console.error('Order generation failed:', result.error);
     } else {
       console.log('Proposed order:', result.order);
+      // Persist the proposed order to the log for audit and analysis
+      await logOrder({ decision, quote, order: result.order });
     }
   } catch (err) {
     console.error('Error fetching market data:', err.message);
