@@ -1,0 +1,1 @@
+{"ts":"2025-09-06T09:46:37.447Z","decision":{"action":"BUY","symbol":"ABC","confidence":0.75,"thesis":"Stub decision for demonstration purposes."},"quote":{"price":1,"volume":100000,"advUsd":100000},"order":{"symbol":"ABC","side":"BUY","qty":750,"limit":1.004,"stop":0.94,"timeStopDays":5}}

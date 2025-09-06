@@ -63,6 +63,51 @@ class Settings {
      * encourages turnover and reduces idle risk.
      */
     this.timeStopDays = parseInt(process.env.TIME_STOP_DAYS || '5', 10);
+
+        /**
+         * Minimum allowed price for a security. Micro‑cap names can trade
+         * below one dollar, but extremely low priced instruments (penny
+         * stocks) often exhibit extreme volatility and manipulation. If
+         * the latest price is below this threshold the engine will skip
+         * the symbol.
+         */
+        this.minPrice = parseFloat(process.env.MIN_PRICE || '0.50');
+
+        /**
+         * Maximum number of times to retry a failed market data request.
+         * Public data endpoints may throttle with HTTP 429 responses or
+         * transient errors. Retries are attempted with exponential
+         * back‑off to give the remote server time to recover.
+         */
+        this.apiRetries = parseInt(process.env.API_RETRIES || '3', 10);
+
+        /**
+         * Base delay in milliseconds between retries of market data
+         * requests. The actual delay grows exponentially with each
+         * attempt (e.g. base × 2ⁿ) to avoid hammering the endpoint when
+         * throttled.
+         */
+        this.apiBackoffMs = parseInt(process.env.API_BACKOFF_MS || '500', 10);
+
+        /**
+         * Enable offline simulation of market data. When true, the
+         * engine will bypass remote requests and return synthetic
+         * price/volume values defined below. This is useful for
+         * development in restricted environments or when connectivity
+         * issues arise.
+         */
+        this.simulateMarketData = process.env.SIMULATE_MARKET_DATA === '1';
+
+        /**
+         * Simulated price used when simulateMarketData is enabled.
+         */
+        this.simulatedPrice = parseFloat(process.env.SIMULATED_PRICE || '1.00');
+
+        /**
+         * Simulated volume used when simulateMarketData is enabled. The
+         * average daily volume (ADV) will be computed as price × volume.
+         */
+        this.simulatedVolume = parseInt(process.env.SIMULATED_VOLUME || '100000', 10);
   }
 }
 

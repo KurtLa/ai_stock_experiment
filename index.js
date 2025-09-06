@@ -27,6 +27,11 @@ const INITIAL_EQUITY = parseFloat(process.env.EQUITY || '10000');
  */
 function proposeOrder(decision, quote, equity) {
   const { price, advUsd } = quote;
+  // Skip very low priced instruments below configured minimum. Penny stocks
+  // often carry outsized execution and manipulation risk.
+  if (price < config.minPrice) {
+    return { error: 'Price below minimum threshold' };
+  }
   // Liquidity check
   if (advUsd < config.minAdvUsd) {
     return { error: 'Insufficient liquidity' };

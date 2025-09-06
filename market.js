@@ -9,6 +9,18 @@
 // results. These functions are intended for educational use only.
 
 const https = require('https');
+const config = require('./config');
+
+/**
+ * Sleep for the specified number of milliseconds. Used for retry
+ * back‑off between repeated API calls.
+ *
+ * @param {number} ms Duration in milliseconds
+ * @returns {Promise<void>} Promise resolved after the delay
+ */
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Fetch basic quote data for a given symbol from Yahoo Finance. The
@@ -19,33 +31,77 @@ const https = require('https');
  * @param {string} symbol Stock or ETF ticker symbol
  * @returns {Promise<{ price: number, volume: number, advUsd: number }>} Quote info
  */
-function fetchQuote(symbol) {
+function fetchQuote(symbol, attempt = 0) {
+  // If simulation mode is enabled, return deterministic values without hitting a network endpoint.
+  if (config.simulateMarketData) {
+    const price = config.simulatedPrice;
+    const volume = config.simulatedVolume;
+    const advUsd = price * volume;
+    return Promise.resolve({ price, volume, advUsd });
+  }
+
   return new Promise((resolve, reject) => {
     const qs = encodeURIComponent(symbol);
     const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${qs}`;
-    https
+    const req = https
       .get(url, (res) => {
+        const { statusCode } = res;
         let data = '';
         res.on('data', (chunk) => (data += chunk));
         res.on('end', () => {
+          const isSuccess = statusCode >= 200 && statusCode < 300;
+          // Retry on HTTP error responses (e.g. 429 Too Many Requests)
+          if (!isSuccess) {
+            const bodySnippet = (data || '').toString().trim().slice(0, 120);
+            if (attempt < config.apiRetries) {
+              const backoff = config.apiBackoffMs * Math.pow(2, attempt);
+              delay(backoff)
+                .then(() => fetchQuote(symbol, attempt + 1))
+                .then(resolve)
+                .catch(reject);
+              return;
+            }
+            reject(new Error(`HTTP ${statusCode} when fetching quote: ${bodySnippet || 'No response body'}`));
+            return;
+          }
+          // Parse JSON response
           try {
             const json = JSON.parse(data);
             const result = json?.quoteResponse?.result?.[0];
-            if (!result) throw new Error('No data');
+            if (!result) throw new Error('No quote data returned');
             const price = Number(result.regularMarketPrice);
             const volume = Number(result.regularMarketVolume);
-            // Approximate ADV (USD) by using today’s volume times price;
-            // for better accuracy use historical averages.
             const advUsd = price * volume;
             resolve({ price, volume, advUsd });
           } catch (err) {
-            reject(err);
+            if (attempt < config.apiRetries) {
+              const backoff = config.apiBackoffMs * Math.pow(2, attempt);
+              delay(backoff)
+                .then(() => fetchQuote(symbol, attempt + 1))
+                .then(resolve)
+                .catch(reject);
+            } else {
+              reject(new Error(`Failed to parse quote response: ${err.message}`));
+            }
           }
         });
       })
       .on('error', (err) => {
-        reject(err);
+        // Network error; attempt retry if possible
+        if (attempt < config.apiRetries) {
+          const backoff = config.apiBackoffMs * Math.pow(2, attempt);
+          delay(backoff)
+            .then(() => fetchQuote(symbol, attempt + 1))
+            .then(resolve)
+            .catch(reject);
+        } else {
+          reject(err);
+        }
       });
+    // Timeout the request after 5 seconds to avoid hanging
+    req.setTimeout(5000, () => {
+      req.destroy();
+    });
   });
 }
 
