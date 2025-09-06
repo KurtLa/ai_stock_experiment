@@ -1,0 +1,17 @@
+{
+  "name": "microcap-node",
+  "version": "0.1.0",
+  "description": "Experimental micro‑cap trading engine with risk management, liquidity filters, and guardrails.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "trading",
+    "microcap",
+    "risk",
+    "experiment"
+  ],
+  "author": "",
+  "license": "MIT"
+}
